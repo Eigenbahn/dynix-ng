@@ -1,0 +1,6 @@
+name: dynix-ng-env
+dependencies:
+- python=3
+- pip
+- ncurses
+- sqlite
