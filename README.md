@@ -15,7 +15,7 @@ Installation:
 
 Running:
 
-    $ conda env activate dynix-ng-env
+    $ conda activate dynix-ng-env
     $ python3 dynix_ng/__init__.py
 
 
