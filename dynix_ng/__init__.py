@@ -15,6 +15,9 @@ module_path = os.path.abspath(main_path + '/..')
 if module_path not in sys.path:
     sys.path.append(module_path)
 
+from dynix_ng.ui.screen import WelcomeScreen, SearchScreen
+from dynix_ng.ui.header import draw_modem_header, draw_dynix_header
+
 from dynix_ng.utils.curses.textpad import CustomTextbox
 from dynix_ng.utils.curses.print import addstr_x_centered
 
@@ -22,17 +25,27 @@ from dynix_ng.library.backend.calibre import CalibreDb
 
 
 
-# ENCODING
+# CONF: ENCODING
 
-locale.setlocale(locale.LC_ALL, '')
-code = locale.getpreferredencoding()
+# locale.setlocale(locale.LC_ALL, '')
+# code = locale.getpreferredencoding()
+
+
+
+# CONF: CURSES
+
+HALF_DELAY = 5
+# How many tenths of a second are waited, from 1 to 255
 
 
 
 # CONF
 
-HALF_DELAY = 5
-# How many tenths of a second are waited, from 1 to 255
+DISPLAY_SECONDS = True
+
+LIBRARY_NAME = 'EIGENBAHN PRIVATE LIBRARY'
+# LIBRARY_NAME = 'GOSHEN PUBLIC LIBRARY'
+
 
 SCREENS = {
     'welcome': '',
@@ -54,104 +67,52 @@ SCREENS = {
     'quit': 'Logoff',
 }
 
+SCREENS = {
+    'welcome': '',
+    'author_search_alpha': 'AUTHOR Alphabetical Search',
+    'title_search_alpha': 'Alphabetical TITLE Search',
+    'title_search_keyword': 'TITLE Keyword Search',
+    'word_search_general': 'GENERAL Word Search',
+    'subject_search': 'SUBJECT INDEX FILE Search',
+    '653_search_authority': '653 SUBJECT Authority Search',
+    '653_search_keyword': '653 SUBJECT Keyword Search',
+    'series_search_keyword': 'SERIES Keyword Search',
+    'series_search_authority': 'SERIES Authority Search',
+
+    'dewey_search': 'DEWEY Decimal Class No. Search',
+    'universal_id_search': 'ISBN/ISSN/OCLC No. Search',
+    'barcode_search': 'Item BARCODE Search',
+    'bib_search': 'Dynix BIB No. Search',
+    'class_search_authority': 'CLASS Authority Search',
+    'pub_search_alpha': 'PUBLISHER Alphabetical Search',
+    'polytek_db': 'Polytechnic Resources Database',
+
+    'quit': 'Quit searching',
+}
+
+
 WELCOME_MESSAGE = ["Welcome to the Online Public Access Catalog!",
                    "Please select one of the options below."]
 
 
-
-# HELPERS: TIME
+SCREEN_PROMPT_WELCOME = "Enter your selection(s) and press <Enter> :"
+# menu_desc_list = list(SCREENS.values())[1:]
+# SCREEN_PROMPT_WELCOME = "Enter your selection (1-" + str(len(menu_desc_list)) + ") and press <Return> :"
 
-def now_as_str():
-    now = datetime.datetime.now()
-    now_str = now.strftime("%I:%M:%S%p").lower()
-    return now_str
-
+SCREEN_PROMPT_SEARCH_TITLE = "Enter TITLE keywords :"
 
 
-# SCREEN FNS
+# display_modem_header = True
+display_modem_header = False
 
-def draw_modem_header(win):
-    # NB: this might correcpond to the modem
-    # FDX probably means full duplex
-    header_txt = " " * 8 + "FDX" + " " * 4 + "10:32p  22- 48"
-    # NB: this -1 should not be needed but doesn't work on a vterm if not set
-    # header_txt += " " * (curses.COLS - len(header_txt))
-    header_txt += " " * (curses.COLS - len(header_txt) - 1)
-
-    win.addstr(0, 0, header_txt, curses.A_UNDERLINE)
-
-
-def draw_header(win):
-    now = datetime.datetime.now()
-    today_str = now.strftime("%d %b %Y").upper()
-    now_str = now.strftime("%I:%M:%S%p").lower()
-    now_str_modem = now_str[:-1]
-
-    # library_name = 'GOSHEN PUBLIC LIBRARY'
-    library_name = 'EIGENBAHN PRIVATE LIBRARY'
-
-    win.addstr(0, 1, " " * (curses.COLS - 2), curses.A_REVERSE)
-    win.addstr(0, 2, today_str, curses.A_REVERSE)
-    addstr_x_centered(win, 1, library_name, curses.A_REVERSE)
-
-    # addstr_x_centered(stdscr, 1, " Dial Pac ", curses.A_REVERSE)
-
-# TODO: class to split draw / input logic into 2 methods
-def draw_screen_welcome(win, inputwin):
-    (lines, cols) = win.getmaxyx()
-
-    y = 2
-
-    # welcome banner
-    for message in WELCOME_MESSAGE:
-        addstr_x_centered(win, y, message)
-        y += 1
-
-    y += 1
-
-    # menu
-    i = 1
-    for screen_menu_desc in list(SCREENS.values())[1:]:
-        num_sep = "  "
-        if i >= 10:
-            num_sep = " "
-        menu_entry = 25 * " " + str(i) + "." + num_sep + screen_menu_desc
-        win.addstr(y, 0, menu_entry)
-        i += 1
-        y += 1
-
-    y += 4
-
-    # input
-    prompt_text = " Enter your selection(s) and press <Enter> : "
-    win.addstr(lines - 2, 1, prompt_text, curses.A_STANDOUT)
-
-    # shortcuts
-    win.addstr(lines - 1, 0, "S=Shortcut on, BB=Bulleton Board, ?=Help")
-
-    box = CustomTextbox(inputwin)
-    user_input = box.edit() # NB: breaks after `HALF_DELAY`
-
-    if user_input != curses.ERR:
-        return list(SCREENS.keys())[int(user_input)]
-    return curses.ERR
-
-
-
-# HELPERS: FORMAT TIME
-
-def now_as_str():
-    now = datetime.datetime.now()
-    now_str = now.strftime("%I:%M:%S%p").lower()
-    return now_str
 
 
 # GLOBAL VARS
 
-user_input = ""
+current_screen_id = 'welcome'
+current_screen = None
 
-# display_modem_header = True
-display_modem_header = False
+user_input = ""
 
 
 
@@ -164,8 +125,14 @@ display_modem_header = False
 
 # SCRIPT
 
+
 def main(stdscr):
     global user_input
+    global current_screen_id
+    global current_screen
+    global SCREENS
+    global LIBRARY_NAME, DISPLAY_SECONDS
+    global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE
 
     db = CalibreDb()
 
@@ -186,12 +153,11 @@ def main(stdscr):
     y += 2
 
     screen_win = curses.newwin(curses.LINES - y, curses.COLS, y, 0)
-    win_list.append(screen_win)
+    # win_list.append(screen_win) # NB: refresh() called on DynixScreen object
 
-    prompt_text = " Enter your selection(s) and press <Enter> : "
-    input_len = 2
-    input_win = curses.newwin(1, input_len + 1, curses.LINES - 2, len(prompt_text) + 1)
-    win_list.append(input_win)
+    screen_welcome = WelcomeScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
+
+    current_screen = screen_welcome
 
     while True:
 
@@ -199,22 +165,32 @@ def main(stdscr):
 
         if display_modem_header:
             draw_modem_header(modem_header_win)
-        draw_header(header_win)
+        draw_dynix_header(header_win, LIBRARY_NAME, DISPLAY_SECONDS)
+
+        current_screen.draw()
 
         # NB: breaks after `HALF_DELAY`
-        user_input = draw_screen_welcome(screen_win, input_win)
-
-        # refresh screen
-        # header_win.addstr(0, 0, now_as_str())
+        user_input = current_screen.get_input()
 
         for w in win_list:
             w.refresh()
+        current_screen.refresh()
 
         if user_input != curses.ERR:
             # actual input (not halfdelay)
-            break
+            if user_input in list(SCREENS.keys()):
+                current_screen_id = user_input
+                screen_win.clear()
+                if current_screen_id == 'title_search_keyword':
+                    current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+            else:
+                # TODO: throw exception
+                break
 
 
 if __name__ == "__main__":
-    wrapper(main)
-    print('got: ' + user_input)
+    try:
+        wrapper(main)
+        print('got: ' + user_input)
+    except KeyboardInterrupt:
+        print('bye!')
