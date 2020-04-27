@@ -37,3 +37,8 @@ Integration w/ archive.org, worldcat.org, proper [OPAC](https://en.wikipedia.org
 ## Author
 
 Jordan Besly [@p3r7](https://github.com/p3r7) ([blog](https://www.eigenbahn.com/)).
+
+
+## Similar projects
+
+https://github.com/jonatanskogsfors/librix
