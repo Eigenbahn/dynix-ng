@@ -167,4 +167,9 @@ class CustomTextbox(Textbox):
             if not self.do_command(ch):
                 break
             self.win.refresh()
-        return self.gather()
+        value = self.gather()
+        self._update_max_yx()
+        (y, x) = self.win.getyx()
+        self.win.insertln()
+        self.win.move(y, 0)
+        return value
