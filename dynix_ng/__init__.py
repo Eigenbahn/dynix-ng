@@ -17,6 +17,7 @@ if module_path not in sys.path:
 
 from dynix_ng.ui.screen import WelcomeScreen, SearchScreen, CounterScreen, SummaryScreen, ItemScreen
 from dynix_ng.ui.header import draw_modem_header, draw_dynix_header
+from dynix_ng.ui.session import DynixSession, DynixSearch
 
 from dynix_ng.utils.curses.textpad import CustomTextbox
 from dynix_ng.utils.curses.print import addstr_x_centered
@@ -157,8 +158,10 @@ def main(stdscr):
     # PROMPTS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
 
-
+    # backends
     db = CalibreDb()
+
+    session = DynixSession()
 
     win_list = []
 
@@ -222,7 +225,7 @@ def main(stdscr):
                     nb_items = current_screen.count_total
                     current_screen_id = 'summary'
                     current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
-                                                   db, recall_query, 'title', nb_items)
+                                                   session)
 
             elif current_screen_id == 'title_search_keyword':
                 if user_input.upper() == 'SO': # Start Over
@@ -231,20 +234,18 @@ def main(stdscr):
                     current_screen = screen_welcome
                 else:
                     user_query = user_input
-                    recall_query = recall.user_query_to_recall(user_input)
-                    # where = recall.recall_to_sql('title', recall_query, 'sqlite3')
-                    # results = db.book_list(fetch_mode='all', where=where)
+                    session.search = DynixSearch(user_query, db, 'title')
 
                     screen_win.clear()
                     current_screen_id = 'search_counter'
                     current_screen = CounterScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
-                                                   db, recall_query, 'title')
+                                                   session)
 
-                    if current_screen.count_total <= 30:
-                        nb_items = current_screen.count_total
+                    if session.search.results_total_count <= 30:
+                        nb_items = session.search.results_total_count
                         current_screen_id = 'summary'
                         current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
-                                                       db, recall_query, 'title', nb_items)
+                                                       session)
 
 
                         # results = current_screen.recall_query_results
@@ -257,10 +258,8 @@ def main(stdscr):
                     current_screen_id = 'welcome'
                     current_screen = screen_welcome
                 elif user_input.isdigit():
-                    item_id = int(user_input)
-                    recall_query = current_screen.recall_query
-                    recall_query_results = current_screen.recall_query_results
-                    item = list(recall_query_results.values())[item_id]
+                    session.item_id = int(user_input)
+                    session.item = list(session.search.results.values())[session.item_id]
 
                     # results = item
                     # break
@@ -269,7 +268,7 @@ def main(stdscr):
 
                     screen_win.clear()
                     current_screen_id = 'item_view'
-                    current_screen = ItemScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, recall_query, recall_query_results, item)
+                    current_screen = ItemScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
 
             else:
                 break
