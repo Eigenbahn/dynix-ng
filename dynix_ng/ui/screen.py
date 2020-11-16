@@ -148,21 +148,11 @@ class SearchScreen(DynixScreen):
 
 class CounterScreen(DynixScreen):
     def __init__(self, screen_id, desc, win, input_prompt, input_len,
-                 db, recall_query,
-                 db_field):
-        self.db = db
-        self.db_field = db_field
-        self.recall_query = recall_query
+                 session):
 
-        self.recall_query_results = {}
-        incremental_terms = []
-        for term in self.recall_query:
-            incremental_terms.append(term)
-            where = recall.recall_to_sql(db_field, incremental_terms, 'sqlite3')
-            count = db.book_list(fetch_mode='first', fetch_format='count', where=where)
-            self.recall_query_results[term] = count
-
-        self.count_total = list(self.recall_query_results.values())[-1]
+        self.session = session
+        self.session.search_stage = 'count'
+        self.session.search.query_count_incremental()
 
         super().__init__(screen_id, desc, win, input_prompt, input_len)
 
@@ -170,24 +160,26 @@ class CounterScreen(DynixScreen):
     def draw(self):
         (lines, cols) = self.win.getmaxyx()
 
+        nb_total = str(self.session.search.results_total_count)
+
         y = 1
 
-        self.win.addstr(y, 5, " ".join(self.recall_query))
-        self.win.addstr(y, 5 + 20 + 2, "Total=" + str(self.count_total))
+        self.win.addstr(y, 5, " ".join(self.session.search.recall_query))
+        self.win.addstr(y, 5 + 20 + 2, "Total=" + nb_total)
         y += 1
 
         self.win.addstr(y, 4, "Searching...                Running Total")
         y += 2
 
-        for term, count in self.recall_query_results.items():
+        for term, count in self.session.search.results_incremental_counts.items():
             self.win.addstr(y, 4, term)
             self.win.addstr(y, 25, str(count))
             y += 1
 
-        self.win.addstr(lines - 7, 4, "titles matched     " + str(self.count_total))
+        self.win.addstr(lines - 7, 4, "titles matched     " + nb_total)
 
         self.win.addstr(lines - 5, 4, "To narrow the search, enter more words.")
-        self.win.addstr(lines - 4, 4, "Or, press 'D' and <Return> to see all " + str(self.count_total) + " titles.")
+        self.win.addstr(lines - 4, 4, "Or, press 'D' and <Return> to see all " + nb_total + " titles.")
 
         # input
         prompt_text = " " + self.input_prompt +  " "
@@ -206,22 +198,16 @@ class CounterScreen(DynixScreen):
 
 
 
-# SEARCH SUMMARY SCREEN
+# SEARCH SUMMARY SCREEN (LIST OF RESULTS)
 
 class SummaryScreen(DynixScreen):
 
     def __init__(self, screen_id, desc, win, input_prompt, input_len,
-                 db, recall_query,
-                 db_field,
-                 nb_items):
-        self.db = db
-        self.db_field = db_field
-        self.recall_query = recall_query
+                 session):
 
-        self.count_total = nb_items
-
-        where = recall.recall_to_sql(db_field, recall_query, 'sqlite3')
-        self.recall_query_results = db.book_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
+        self.session = session
+        self.session.search_stage = 'summary'
+        self.session.search.query()
 
         super().__init__(screen_id, desc, win, input_prompt, input_len)
 
@@ -231,7 +217,7 @@ class SummaryScreen(DynixScreen):
         y = 1
 
         # query
-        self.win.addstr(y, 4, "Your search:  " + ' '.join(self.recall_query))
+        self.win.addstr(y, 4, "Your search:  " + ' '.join(self.session.search.recall_query))
         y += 1
 
         # table header
@@ -242,7 +228,7 @@ class SummaryScreen(DynixScreen):
 
         # results table
         i = 1
-        for item_id, item in self.recall_query_results.items():
+        for item_id, item in self.session.search.results.items():
             author_summary = ' - '.join(item['authors_sorted'])
             pub_date = item['pub_date'][:10]
             if pub_date == '0101-01-01':
@@ -259,7 +245,7 @@ class SummaryScreen(DynixScreen):
 
         # paging
         # TODO: right-align
-        self.win.addstr(lines - 3, 0, "---" + str(self.count_total) + " titles, End of List" + "---")
+        self.win.addstr(lines - 3, 0, "---" + str(self.session.search.results_total_count) + " titles, End of List" + "---")
 
         # shortcuts
         self.win.addstr(lines - 1, 0, "Commands: SO=Start Over, B=Back, D=Display, ?=Help")
@@ -280,11 +266,9 @@ class SummaryScreen(DynixScreen):
 class ItemScreen(DynixScreen):
 
     def __init__(self, screen_id, desc, win, input_prompt, input_len,
-                 recall_query, recall_query_results, item):
-        self.recall_query = recall_query
-        self.recall_query_results = recall_query_results
-        self.item = item
-
+                 session):
+        self.session = session
+        self.session.search_stage = 'item'
         super().__init__(screen_id, desc, win, input_prompt, input_len)
 
     def draw(self):
@@ -296,29 +280,29 @@ class ItemScreen(DynixScreen):
 
         # query
         addstr_rigth_x(self.win, y, 16, "Call Number:  ")
-        self.win.addstr(y, props_x, str(self.item['book_id']))
+        self.win.addstr(y, props_x, str(self.session.item['book_id']))
         y += 2
 
         addstr_rigth_x(self.win, y, 16, "AUTHOR:")
 
-        for i, a in enumerate(self.item['authors_sorted'], start=1):
+        for i, a in enumerate(self.session.item['authors_sorted'], start=1):
             self.win.addstr(y, props_x, str(i) + ") " + a)
             y += 1
         y += 1
 
         addstr_rigth_x(self.win, y, 16, "TITLE:")
         # TODO: word wrap
-        self.win.addstr(y, props_x, self.item['sorted_name'])
+        self.win.addstr(y, props_x, self.session.item['sorted_name'])
         y += 2
 
         # addstr_rigth_x(self.win, y, 16, "PUBLISHER:")
         addstr_rigth_x(self.win, y, 16, "IMPRINT:")
-        self.win.addstr(y, props_x, ' - '.join(self.item['publishers']))
+        self.win.addstr(y, props_x, ' - '.join(self.session.item['publishers']))
         y += 2
 
         # addstr_rigth_x(self.win, y, 16, "TAGS:")
         addstr_rigth_x(self.win, y, 16, "SUBJECTS:")
-        for i, t in enumerate(self.item['tags'], start=1):
+        for i, t in enumerate(self.session.item['tags'], start=1):
             self.win.addstr(y, props_x, str(i) + ") " + t)
             y += 1
         y += 1
