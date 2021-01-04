@@ -269,7 +269,7 @@ def main(stdscr):
                 current_screen = screen_welcome
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
-                session.item = list(session.search.results.values())[session.item_id]
+                session.item = list(session.search.results.values())[session.item_id - 1]
 
                 # results = item
                 # break
