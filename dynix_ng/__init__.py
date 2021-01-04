@@ -5,6 +5,7 @@ import sys
 from pprint import pprint
 import locale
 
+import time
 import datetime
 
 import curses
@@ -25,6 +26,7 @@ from dynix_ng.utils.curses.print import addstr_x_centered
 from dynix_ng.library.backend.calibre import CalibreDb
 
 import dynix_ng.utils.query.recall as recall
+
 
 
 # CONF: ENCODING
@@ -137,9 +139,8 @@ results = None
 
 ## TRANSITION
 
-def screen_change(new_screen_id):
+def screen_change(screen_win, new_screen_id):
     global session
-    global screen_win
     global static_screens
     global SCREENS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
@@ -155,13 +156,23 @@ def screen_change(new_screen_id):
         session.screen = static_screens[session.screen_id]
     elif session.screen_id == 'title_search_keyword':
         session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+    elif session.screen_id == 'search_counter':
+        session.screen = CounterScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
+                                       session)
+    elif session.screen_id == 'summary':
+        session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2, session)
+    elif session.screen_id == 'item_view':
+        session.screen = ItemScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+    else:
+        # TODO: throw exception
+        pass
 
 
 
 ## SCRIPT
 
 def main(stdscr):
-    global sessions
+    global session
 
     # headers
     global DISPLAY_MODEM_HEADER
@@ -224,57 +235,30 @@ def main(stdscr):
 
         if session.screen_id == 'welcome':
             if session.user_input in list(SCREENS.keys()):
-                session.screen_id = session.user_input
-                screen_win.clear()
-                if session.screen_id == 'title_search_keyword':
-                    session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
-            else:
-                # TODO: throw exception
-                break
+                screen_change(screen_win, session.user_input)
         elif session.screen_id == 'search_counter':
             if session.user_input.upper() == 'D': # Show all results
-                screen_win.clear()
-
-                nb_items = session.screen.count_total
-                session.screen_id = 'summary'
-                session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
-                                               session)
-
+                screen_change(screen_win, 'summary')
         elif session.screen_id == 'title_search_keyword':
             if session.user_input.upper() == 'SO': # Start Over
-                screen_win.clear()
-                session.screen_id = 'welcome'
-                session.screen = screen_welcome
+                screen_change(screen_win, 'welcome')
             else:
                 user_query = user_input
                 session.search = DynixSearch(user_query, db, 'title')
 
-                screen_win.clear()
-                session.screen_id = 'search_counter'
-                session.screen = CounterScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
-                                               session)
-
+                # NB: systematic transition to search counter screen before search summary to mimick original behaviour
+                screen_change(screen_win, 'search_counter')
                 if session.search.results_total_count <= 30:
-                    nb_items = session.search.results_total_count
-                    session.screen_id = 'summary'
-                    session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
-                                                   session)
-
+                    time.sleep(0.1)
+                    screen_change(screen_win, 'summary')
 
         elif session.screen_id == 'summary':
             if session.user_input.upper() == 'SO': # Start Over
-                screen_win.clear()
-                session.screen_id = 'welcome'
-                session.screen = screen_welcome
+                screen_change(screen_win, 'welcome')
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
                 session.item = list(session.search.results.values())[session.item_id - 1]
-
-                del session.screen # free memory
-
-                screen_win.clear()
-                session.screen_id = 'item_view'
-                session.screen = ItemScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+                screen_change(screen_win, 'item_view')
 
         else:
             break
