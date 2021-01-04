@@ -7,6 +7,12 @@ import dynix_ng.utils.query.recall as recall
 
 class DynixSession():
     def __init__(self):
+
+        self.screen_id = 'welcome'
+        self.screen = None
+
+        self.user_input = ""
+
         self.search = None
         self.search_stage = None
         self.item_id = None

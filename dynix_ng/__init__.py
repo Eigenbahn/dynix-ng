@@ -15,9 +15,9 @@ module_path = os.path.abspath(main_path + '/..')
 if module_path not in sys.path:
     sys.path.append(module_path)
 
+from dynix_ng.ui.session import DynixSession, DynixSearch
 from dynix_ng.ui.screen import WelcomeScreen, SearchScreen, CounterScreen, SummaryScreen, ItemScreen
 from dynix_ng.ui.header import draw_modem_header, draw_dynix_header
-from dynix_ng.ui.session import DynixSession, DynixSearch
 
 from dynix_ng.utils.curses.textpad import CustomTextbox
 from dynix_ng.utils.curses.print import addstr_x_centered
@@ -115,10 +115,10 @@ DISPLAY_MODEM_HEADER = False
 
 # GLOBAL VARS
 
+session = None
+
 current_screen_id = 'welcome'
 current_screen = None
-
-user_input = ""
 
 user_query = ""
 recall_query = []
@@ -139,9 +139,20 @@ results = None
 
 # SCRIPT
 
+def screen_change(screen_id):
+    global current_screen_id
+    global current_screen
+    global screen_win
+    global SCREENS
+    global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
+    current_screen_id = screen_id
+    screen_win.clear()
+    if current_screen_id == 'title_search_keyword':
+        current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+
 
 def main(stdscr):
-    global user_input
+    global sessions
     global results
     global current_screen_id
     global current_screen
@@ -202,76 +213,79 @@ def main(stdscr):
             w.refresh()
         current_screen.refresh()
 
+        if user_input == curses.ERR: # halfdelay
+            continue
 
+        # NB: curses box has a tendency to add a trailing space when pressing <Return>
+        session.user_input = user_input.strip()
 
-        if user_input != curses.ERR: # actual input (not halfdelay)
+        if session.screen_id == 'welcome':
+            if session.user_input in list(SCREENS.keys()):
+                session.screen_id = session.user_input
+                screen_win.clear()
+                if session.screen_id == 'title_search_keyword':
+                    current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+            else:
+                # TODO: throw exception
+                break
+        elif session.screen_id == 'search_counter':
+            if session.user_input.upper() == 'D': # Show all results
+                screen_win.clear()
 
-            # NB: curses box has a tendency to add a trailing space when pressing <Return>
-            user_input = user_input.strip()
+                nb_items = current_screen.count_total
+                current_screen_id = 'summary'
+                current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
+                                               session)
 
-            if current_screen_id == 'welcome':
-                if user_input in list(SCREENS.keys()):
-                    current_screen_id = user_input
-                    screen_win.clear()
-                    if current_screen_id == 'title_search_keyword':
-                        current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
-                else:
-                    # TODO: throw exception
-                    break
-            elif current_screen_id == 'search_counter':
-                if user_input.upper() == 'D': # Show all results
-                    screen_win.clear()
+        elif session.screen_id == 'title_search_keyword':
+            if session.user_input.upper() == 'SO': # Start Over
+                screen_win.clear()
+                current_screen_id = 'welcome'
+                current_screen = screen_welcome
+            else:
+                user_query = user_input
+                session.search = DynixSearch(user_query, db, 'title')
 
-                    nb_items = current_screen.count_total
-                    current_screen_id = 'summary'
+                screen_win.clear()
+                session.screen_id = 'search_counter'
+                current_screen = CounterScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
+                                               session)
+
+                if session.search.results_total_count <= 30:
+                    nb_items = session.search.results_total_count
+                    session.screen_id = 'summary'
                     current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
                                                    session)
 
-            elif current_screen_id == 'title_search_keyword':
-                if user_input.upper() == 'SO': # Start Over
-                    screen_win.clear()
-                    current_screen_id = 'welcome'
-                    current_screen = screen_welcome
-                else:
-                    user_query = user_input
-                    session.search = DynixSearch(user_query, db, 'title')
 
-                    screen_win.clear()
-                    current_screen_id = 'search_counter'
-                    current_screen = CounterScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
-                                                   session)
-
-                    if session.search.results_total_count <= 30:
-                        nb_items = session.search.results_total_count
-                        current_screen_id = 'summary'
-                        current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
-                                                       session)
-
-
-                        # results = current_screen.recall_query_results
-                        # break
-
-
-            elif current_screen_id == 'summary':
-                if user_input.upper() == 'SO': # Start Over
-                    screen_win.clear()
-                    current_screen_id = 'welcome'
-                    current_screen = screen_welcome
-                elif user_input.isdigit():
-                    session.item_id = int(user_input)
-                    session.item = list(session.search.results.values())[session.item_id]
-
-                    # results = item
+                    # results = current_screen.recall_query_results
                     # break
 
-                    del current_screen # free memory
 
-                    screen_win.clear()
-                    current_screen_id = 'item_view'
-                    current_screen = ItemScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+        elif session.screen_id == 'summary':
+            if session.user_input.upper() == 'SO': # Start Over
+                screen_win.clear()
+                session.screen_id = 'welcome'
+                current_screen = screen_welcome
+            elif session.user_input.isdigit():
+                session.item_id = int(user_input)
+                session.item = list(session.search.results.values())[session.item_id]
 
-            else:
-                break
+                # results = item
+                # break
+
+                del current_screen # free memory
+
+                screen_win.clear()
+                session.screen_id = 'item_view'
+                current_screen = ItemScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+
+        else:
+            break
+
+
+
+## START
 
 if __name__ == "__main__":
     try:

@@ -36,6 +36,9 @@ class DynixScreen(ABC):
         self.win.refresh()
         self.inputwin.refresh()
 
+    def handle_user_input(self, user_input, SCREENS):
+        pass
+
 
 
 # MAIN MENU SCREEN
@@ -104,6 +107,11 @@ class WelcomeScreen(DynixScreen):
                 return user_input
         return curses.ERR
 
+    def handle_user_input(self, user_input, SCREENS):
+        if user_input in list(SCREENS.keys()):
+            return {'action': 'change_screen',
+                    'screen_id': user_input}
+
 
 
 # SEARCH SCREEN
@@ -141,6 +149,14 @@ class SearchScreen(DynixScreen):
         if user_input != curses.ERR:
             return user_input
         return curses.ERR
+
+    def handle_user_input(self, user_input, SCREENS):
+        if user_input.upper() == 'SO': # Start Over
+            return {'action': 'change_screen',
+                    'screen_id': 'welcome'}
+        else:
+            return {'action': 'search',
+                    'query': user_input}
 
 
 
@@ -195,6 +211,14 @@ class CounterScreen(DynixScreen):
         if user_input != curses.ERR:
             return user_input
         return curses.ERR
+
+    def handle_user_input(self, user_input, SCREENS):
+        if user_input.upper() == 'D': # Show all results
+            return {'action': 'change_screen',
+                    'screen_id': 'welcome'}
+        else:
+            return {'action': 'search',
+                    'query': user_input}
 
 
 
