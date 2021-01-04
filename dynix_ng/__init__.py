@@ -240,7 +240,7 @@ def main(stdscr):
             if session.user_input.upper() == 'D': # Show all results
                 screen_change(screen_win, 'summary')
         elif session.screen_id == 'title_search_keyword':
-            if session.user_input.upper() == 'SO': # Start Over
+            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
             else:
                 user_query = user_input
@@ -253,13 +253,26 @@ def main(stdscr):
                     screen_change(screen_win, 'summary')
 
         elif session.screen_id == 'summary':
-            if session.user_input.upper() == 'SO': # Start Over
+            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
                 session.item = list(session.search.results.values())[session.item_id - 1]
                 screen_change(screen_win, 'item_view')
 
+        elif session.screen_id == 'item_view':
+            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+                screen_change(screen_win, 'welcome')
+            elif session.user_input.upper() == 'PT': # Previous Title
+                if session.item_id > 1:
+                    session.item_id -= 1
+                    session.item = list(session.search.results.values())[session.item_id - 1]
+                    screen_change(screen_win, 'item_view')
+            elif session.user_input.upper() == 'NT': # Next Title
+                if session.item_id < session.search.results_total_count:
+                    session.item_id += 1
+                    session.item = list(session.search.results.values())[session.item_id - 1]
+                    screen_change(screen_win, 'item_view')
         else:
             break
 
