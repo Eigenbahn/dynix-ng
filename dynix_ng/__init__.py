@@ -117,8 +117,7 @@ DISPLAY_MODEM_HEADER = False
 
 session = None
 
-current_screen_id = 'welcome'
-current_screen = None
+static_screens = {}
 
 user_query = ""
 recall_query = []
@@ -137,25 +136,34 @@ results = None
 # exit()
 
 
-# SCRIPT
+## TRANSITION
 
-def screen_change(screen_id):
-    global current_screen_id
-    global current_screen
+def screen_change(new_screen_id):
+    global session
     global screen_win
+    global static_screens
     global SCREENS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
-    current_screen_id = screen_id
-    screen_win.clear()
-    if current_screen_id == 'title_search_keyword':
-        current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
 
+    screen_win.clear()
+
+    if not session.screen_id in static_screens.keys():
+        del session.screen # free memory
+
+    session.screen_id = new_screen_id
+
+    if session.screen_id in static_screens.keys():
+        session.screen = static_screens[session.screen_id]
+    elif session.screen_id == 'title_search_keyword':
+        session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+
+
+
+## SCRIPT
 
 def main(stdscr):
     global sessions
     global results
-    global current_screen_id
-    global current_screen
 
     # current search
     global user_query, recall_query
@@ -171,8 +179,6 @@ def main(stdscr):
 
     # backends
     db = CalibreDb()
-
-    session = DynixSession()
 
     win_list = []
 
@@ -192,8 +198,10 @@ def main(stdscr):
 
     screen_win = curses.newwin(curses.LINES - y, curses.COLS, y, 0)
 
-    screen_welcome = WelcomeScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
-    current_screen = screen_welcome
+    session = DynixSession()
+    screen_welcome = WelcomeScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
+    static_screens[session.screen_id] = screen_welcome
+    session.screen = screen_welcome
 
 
     while True:
@@ -204,14 +212,14 @@ def main(stdscr):
             draw_modem_header(modem_header_win)
         draw_dynix_header(header_win, LIBRARY_NAME, DISPLAY_SECONDS)
 
-        current_screen.draw()
+        session.screen.draw()
 
         # NB: breaks after `HALF_DELAY`
-        user_input = current_screen.get_input()
+        user_input = session.screen.get_input()
 
         for w in win_list:
             w.refresh()
-        current_screen.refresh()
+        session.screen.refresh()
 
         if user_input == curses.ERR: # halfdelay
             continue
@@ -224,7 +232,7 @@ def main(stdscr):
                 session.screen_id = session.user_input
                 screen_win.clear()
                 if session.screen_id == 'title_search_keyword':
-                    current_screen = SearchScreen(current_screen_id, SCREENS[current_screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
+                    session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
             else:
                 # TODO: throw exception
                 break
@@ -232,33 +240,33 @@ def main(stdscr):
             if session.user_input.upper() == 'D': # Show all results
                 screen_win.clear()
 
-                nb_items = current_screen.count_total
-                current_screen_id = 'summary'
-                current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
+                nb_items = session.screen.count_total
+                session.screen_id = 'summary'
+                session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
                                                session)
 
         elif session.screen_id == 'title_search_keyword':
             if session.user_input.upper() == 'SO': # Start Over
                 screen_win.clear()
-                current_screen_id = 'welcome'
-                current_screen = screen_welcome
+                session.screen_id = 'welcome'
+                session.screen = screen_welcome
             else:
                 user_query = user_input
                 session.search = DynixSearch(user_query, db, 'title')
 
                 screen_win.clear()
                 session.screen_id = 'search_counter'
-                current_screen = CounterScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
+                session.screen = CounterScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
                                                session)
 
                 if session.search.results_total_count <= 30:
                     nb_items = session.search.results_total_count
                     session.screen_id = 'summary'
-                    current_screen = SummaryScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
+                    session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2,
                                                    session)
 
 
-                    # results = current_screen.recall_query_results
+                    # results = session.screen.recall_query_results
                     # break
 
 
@@ -266,7 +274,7 @@ def main(stdscr):
             if session.user_input.upper() == 'SO': # Start Over
                 screen_win.clear()
                 session.screen_id = 'welcome'
-                current_screen = screen_welcome
+                session.screen = screen_welcome
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
                 session.item = list(session.search.results.values())[session.item_id - 1]
@@ -274,11 +282,11 @@ def main(stdscr):
                 # results = item
                 # break
 
-                del current_screen # free memory
+                del session.screen # free memory
 
                 screen_win.clear()
                 session.screen_id = 'item_view'
-                current_screen = ItemScreen(current_screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+                session.screen = ItemScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
 
         else:
             break
