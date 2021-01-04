@@ -119,7 +119,6 @@ session = None
 
 static_screens = {}
 
-user_query = ""
 recall_query = []
 
 results = None
@@ -163,10 +162,6 @@ def screen_change(new_screen_id):
 
 def main(stdscr):
     global sessions
-    global results
-
-    # current search
-    global user_query, recall_query
 
     # headers
     global DISPLAY_MODEM_HEADER
@@ -266,10 +261,6 @@ def main(stdscr):
                                                    session)
 
 
-                    # results = session.screen.recall_query_results
-                    # break
-
-
         elif session.screen_id == 'summary':
             if session.user_input.upper() == 'SO': # Start Over
                 screen_win.clear()
@@ -278,9 +269,6 @@ def main(stdscr):
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
                 session.item = list(session.search.results.values())[session.item_id - 1]
-
-                # results = item
-                # break
 
                 del session.screen # free memory
 
@@ -299,7 +287,5 @@ if __name__ == "__main__":
     try:
         wrapper(main)
         print('got: "' + user_input +'"')
-        if results:
-            pprint(results)
     except KeyboardInterrupt:
         print('bye!')
