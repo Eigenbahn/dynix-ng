@@ -242,6 +242,8 @@ def main(stdscr):
         elif session.screen_id == 'title_search_keyword':
             if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
+            elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                screen_change(screen_win, 'welcome')
             else:
                 user_query = user_input
                 session.search = DynixSearch(user_query, db, 'title')
@@ -255,6 +257,11 @@ def main(stdscr):
         elif session.screen_id == 'summary':
             if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
+            elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                if session.search.results_total_count > 30:
+                    screen_change(screen_win, 'search_counter')
+                else:
+                    screen_change(screen_win, 'title_search_keyword')
             elif session.user_input.isdigit():
                 session.item_id = int(user_input)
                 session.item = list(session.search.results.values())[session.item_id - 1]
@@ -263,6 +270,8 @@ def main(stdscr):
         elif session.screen_id == 'item_view':
             if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
+            if session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                screen_change(screen_win, 'summary')
             elif session.user_input.upper() == 'PT': # Previous Title
                 if session.item_id > 1:
                     session.item_id -= 1
