@@ -131,7 +131,7 @@ results = None
 
 # db = CalibreDb()
 # recall_query = recall.user_query_to_recall("stat?")
-# where = recall.recall_to_sql('title', recall_query, 'sqlite3')
+# where = recall.recall_to_sql(['title'], recall_query, 'sqlite3')
 # res = db.book_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
 # pprint(res)
 # exit()
@@ -246,7 +246,7 @@ def main(stdscr):
                 screen_change(screen_win, 'welcome')
             else:
                 user_query = user_input
-                session.search = DynixSearch(user_query, db, 'title')
+                session.search = DynixSearch(user_query, db, ['title'])
 
                 # NB: systematic transition to search counter screen before search summary to mimick original behaviour
                 screen_change(screen_win, 'search_counter')

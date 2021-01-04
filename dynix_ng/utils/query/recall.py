@@ -22,13 +22,12 @@ def user_query_to_recall(query):
 
 # https://stackoverflow.com/questions/5071601/how-do-i-use-regex-in-a-sqlite-query
 
-def recall_to_sql(column, query_terms, sql_dialect):
-    sql_query_filters = []
-
+def recall_to_sql(columns, query_terms, sql_dialect):
     (wb_l, wb_r) = sql_dialect_word_boundaries(sql_dialect)
     wc = sql_dialect_word_character(sql_dialect)
     is_case_sensitive = sql_dialect_is_case_sensitive(sql_dialect)
 
+    sql_rx_list = []
     for term in query_terms:
         ends_with_s = term[-1] == "S"
         ends_with_apostroph_s = term[-2:] in ("'S", "S'")
@@ -45,11 +44,18 @@ def recall_to_sql(column, query_terms, sql_dialect):
         else:
             rx = "'.*" + wb_l + term + wb_r + ".*'"
 
+        sql_rx_list.append(rx)
+
+    sql_query_filters = []
+    for column in columns:
+        sql_col_filters = []
         if is_case_sensitive:
             column = 'UPPER(' + column + ')'
-        sql_query_filters.append(column + " REGEXP " + rx)
+        for rx in sql_rx_list:
+            sql_col_filters.append(column + " REGEXP " + rx)
+        sql_query_filters.append('(' + ' AND '.join(sql_col_filters) + ')')
 
-    return ' AND '.join(sql_query_filters)
+    return ' OR '.join(sql_query_filters)
 
 
 def sql_dialect_word_boundaries(dialect):
