@@ -94,6 +94,15 @@ SCREENS = {
     'quit': 'Quit searching',
 }
 
+SEARCH_SCREENS = ['author_search_alpha',
+                  'pub_search_alpha',
+                  'title_search_alpha', 'title_search_keyword',
+                  'subject_search',
+                  'word_search_general',
+                  'series_search_keyword', 'series_search_authority'
+                  'universal_id_search',
+                  'bib_search']
+
 
 WELCOME_MESSAGE = ["Welcome to the Online Public Access Catalog!",
                    "Please select one of the options below."]
@@ -143,6 +152,7 @@ def screen_change(screen_win, new_screen_id):
     global session
     global static_screens
     global SCREENS
+    global SEARCH_SCREENS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
 
     screen_win.clear()
@@ -154,7 +164,8 @@ def screen_change(screen_win, new_screen_id):
 
     if session.screen_id in static_screens.keys():
         session.screen = static_screens[session.screen_id]
-    elif session.screen_id == 'title_search_keyword':
+    # elif session.screen_id == 'title_search_keyword':
+    elif session.screen_id in SEARCH_SCREENS:
         session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
     elif session.screen_id == 'search_counter':
         session.screen = CounterScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
@@ -168,6 +179,25 @@ def screen_change(screen_win, new_screen_id):
         pass
 
 
+def search_screen_to_backend_fields (backend, screen_id):
+    if screen_id == 'author_search_alpha':
+        return ['author']
+    elif screen_id == 'pub_search_alpha':
+        return ['publisher']
+    elif screen_id in ['title_search_alpha', 'title_search_keyword']:
+        return ['title']
+    elif screen_id == 'subject_search':
+        return ['tag']
+    elif screen_id == 'word_search_general':
+        return ['author', 'publisher', 'title', 'tag', 'series']
+    elif screen_id in ['series_search_keyword', 'series_search_authority']:
+        return ['series']
+    elif screen_id == 'universal_id_search':
+        return ['ISBN', 'LCCN']
+    elif screen_id == 'bib_search':
+        return ['book_id']
+
+
 
 ## SCRIPT
 
@@ -179,6 +209,7 @@ def main(stdscr):
     global LIBRARY_NAME, DISPLAY_SECONDS
 
     global SCREENS
+    global SEARCH_SCREENS
 
     # PROMPTS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
@@ -239,13 +270,20 @@ def main(stdscr):
         elif session.screen_id == 'search_counter':
             if session.user_input.upper() == 'D': # Show all results
                 screen_change(screen_win, 'summary')
-        elif session.screen_id == 'title_search_keyword':
+        # elif session.screen_id == 'title_search_keyword':
+        elif session.screen_id in SEARCH_SCREENS:
             if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
                 screen_change(screen_win, 'welcome')
             elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
                 screen_change(screen_win, 'welcome')
             else:
                 user_query = user_input
+
+                # search_fields = search_screen_to_backend_fields('calibre', session.screen_id)
+                # if not search_fields:
+                #     break
+
+                # session.search = DynixSearch(user_query, db, search_fields)
                 session.search = DynixSearch(user_query, db, ['title'])
 
                 # NB: systematic transition to search counter screen before search summary to mimick original behaviour
@@ -292,6 +330,6 @@ def main(stdscr):
 if __name__ == "__main__":
     try:
         wrapper(main)
-        print('got: "' + user_input +'"')
+        print('got: "' + session.user_input +'"')
     except KeyboardInterrupt:
         print('bye!')
