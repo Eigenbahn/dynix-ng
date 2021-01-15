@@ -31,7 +31,9 @@ Basic integration with calibre db backend.
 
 ## What comes later
 
-Integration w/ archive.org, worldcat.org, proper [OPAC](https://en.wikipedia.org/wiki/Online_public_access_catalog)s, goodreads.com...
+Integration w/ archive.org, worldcat.org, proper [OPAC](https://en.wikipedia.org/wiki/Online_public_access_catalog)s...
+
+We expected to also integrate w/ [goodreads.com](https://www.goodreads.com/) but sadly they are starting to [close their public API](https://joealcorn.co.uk/blog/2020/goodreads-retiring-API).
 
 
 ## Author
