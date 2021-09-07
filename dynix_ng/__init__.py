@@ -27,6 +27,8 @@ from dynix_ng.library.backend.calibre import CalibreDb
 
 import dynix_ng.utils.query.recall as recall
 
+import dynix_ng.state.memory as global_state
+
 
 
 # CONF: ENCODING
@@ -126,8 +128,6 @@ DISPLAY_MODEM_HEADER = False
 
 # GLOBAL VARS
 
-session = None
-
 static_screens = {}
 
 recall_query = []
@@ -148,32 +148,30 @@ results = None
 
 ## TRANSITION
 
-def screen_change(screen_win, new_screen_id):
-    global session
+def screen_change(new_screen_id):
     global static_screens
     global SCREENS
     global SEARCH_SCREENS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
 
-    screen_win.clear()
+    global_state.screen_win.clear()
 
-    if not session.screen_id in static_screens.keys():
-        del session.screen # free memory
+    if not global_state.session.screen_id in static_screens.keys():
+        del global_state.session.screen # free memory
 
-    session.screen_id = new_screen_id
+    global_state.session.screen_id = new_screen_id
 
-    if session.screen_id in static_screens.keys():
-        session.screen = static_screens[session.screen_id]
+    if global_state.session.screen_id in static_screens.keys():
+        global_state.session.screen = static_screens[global_state.session.screen_id]
     # elif session.screen_id == 'title_search_keyword':
-    elif session.screen_id in SEARCH_SCREENS:
-        session.screen = SearchScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_SEARCH_TITLE, 20)
-    elif session.screen_id == 'search_counter':
-        session.screen = CounterScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 15,
-                                       session)
-    elif session.screen_id == 'summary':
-        session.screen = SummaryScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_COUNTER, 2, session)
-    elif session.screen_id == 'item_view':
-        session.screen = ItemScreen(session.screen_id, "", screen_win, SCREEN_PROMPT_ITEM, 2, session)
+    elif global_state.session.screen_id in SEARCH_SCREENS:
+        global_state.session.screen = SearchScreen(global_state.session.screen_id, SCREENS[global_state.session.screen_id], SCREEN_PROMPT_SEARCH_TITLE, 20)
+    elif global_state.session.screen_id == 'search_counter':
+        global_state.session.screen = CounterScreen(global_state.session.screen_id, "", SCREEN_PROMPT_COUNTER, 15)
+    elif global_state.session.screen_id == 'summary':
+        global_state.session.screen = SummaryScreen(global_state.session.screen_id, "", SCREEN_PROMPT_COUNTER, 2)
+    elif global_state.session.screen_id == 'item_view':
+        global_state.session.screen = ItemScreen(global_state.session.screen_id, "", SCREEN_PROMPT_ITEM, 2)
     else:
         # TODO: throw exception
         pass
@@ -202,8 +200,6 @@ def search_screen_to_backend_fields (backend, screen_id):
 ## SCRIPT
 
 def main(stdscr):
-    global session
-
     # headers
     global DISPLAY_MODEM_HEADER
     global LIBRARY_NAME, DISPLAY_SECONDS
@@ -233,12 +229,12 @@ def main(stdscr):
     win_list.append(header_win)
     y += 2
 
-    screen_win = curses.newwin(curses.LINES - y, curses.COLS, y, 0)
+    global_state.screen_win = curses.newwin(curses.LINES - y, curses.COLS, y, 0)
 
-    session = DynixSession()
-    screen_welcome = WelcomeScreen(session.screen_id, SCREENS[session.screen_id], screen_win, SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
-    static_screens[session.screen_id] = screen_welcome
-    session.screen = screen_welcome
+    global_state.session = DynixSession()
+    screen_welcome = WelcomeScreen(global_state.session.screen_id, SCREENS[global_state.session.screen_id], SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
+    static_screens[global_state.session.screen_id] = screen_welcome
+    global_state.session.screen = screen_welcome
 
 
     while True:
@@ -249,33 +245,33 @@ def main(stdscr):
             draw_modem_header(modem_header_win)
         draw_dynix_header(header_win, LIBRARY_NAME, DISPLAY_SECONDS)
 
-        session.screen.draw()
+        global_state.session.screen.draw()
 
         # NB: breaks after `HALF_DELAY`
-        user_input = session.screen.get_input()
+        user_input = global_state.session.screen.get_input()
 
         for w in win_list:
             w.refresh()
-        session.screen.refresh()
+        global_state.session.screen.refresh()
 
         if user_input == curses.ERR: # halfdelay
             continue
 
         # NB: curses box has a tendency to add a trailing space when pressing <Return>
-        session.user_input = user_input.strip()
+        global_state.session.user_input = user_input.strip()
 
-        if session.screen_id == 'welcome':
-            if session.user_input in list(SCREENS.keys()):
-                screen_change(screen_win, session.user_input)
-        elif session.screen_id == 'search_counter':
-            if session.user_input.upper() == 'D': # Show all results
-                screen_change(screen_win, 'summary')
+        if global_state.session.screen_id == 'welcome':
+            if global_state.session.user_input in list(SCREENS.keys()):
+                screen_change(global_state.session.user_input)
+        elif global_state.session.screen_id == 'search_counter':
+            if global_state.session.user_input.upper() == 'D': # Show all results
+                screen_change('summary')
         # elif session.screen_id == 'title_search_keyword':
-        elif session.screen_id in SEARCH_SCREENS:
-            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change(screen_win, 'welcome')
-            elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                screen_change(screen_win, 'welcome')
+        elif global_state.session.screen_id in SEARCH_SCREENS:
+            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+                screen_change('welcome')
+            elif global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                screen_change('welcome')
             else:
                 user_query = user_input
 
@@ -284,42 +280,42 @@ def main(stdscr):
                 #     break
 
                 # session.search = DynixSearch(user_query, db, search_fields)
-                session.search = DynixSearch(user_query, db, ['title'])
+                global_state.session.search = DynixSearch(user_query, db, ['title'])
 
                 # NB: systematic transition to search counter screen before search summary to mimick original behaviour
-                screen_change(screen_win, 'search_counter')
-                if session.search.results_total_count <= 30:
+                screen_change('search_counter')
+                if global_state.session.search.results_total_count <= 30:
                     time.sleep(0.1)
-                    screen_change(screen_win, 'summary')
+                    screen_change('summary')
 
-        elif session.screen_id == 'summary':
-            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change(screen_win, 'welcome')
-            elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                if session.search.results_total_count > 30:
-                    screen_change(screen_win, 'search_counter')
+        elif global_state.session.screen_id == 'summary':
+            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+                screen_change('welcome')
+            elif global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                if global_state.session.search.results_total_count > 30:
+                    screen_change('search_counter')
                 else:
-                    screen_change(screen_win, 'title_search_keyword')
-            elif session.user_input.isdigit():
-                session.item_id = int(user_input)
-                session.item = list(session.search.results.values())[session.item_id - 1]
-                screen_change(screen_win, 'item_view')
+                    screen_change('title_search_keyword')
+            elif global_state.session.user_input.isdigit():
+                global_state.session.item_id = int(user_input)
+                global_state.session.item = list(global_state.session.search.results.values())[global_state.session.item_id - 1]
+                screen_change('item_view')
 
-        elif session.screen_id == 'item_view':
-            if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change(screen_win, 'welcome')
-            if session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                screen_change(screen_win, 'summary')
-            elif session.user_input.upper() == 'PT': # Previous Title
-                if session.item_id > 1:
-                    session.item_id -= 1
-                    session.item = list(session.search.results.values())[session.item_id - 1]
-                    screen_change(screen_win, 'item_view')
-            elif session.user_input.upper() == 'NT': # Next Title
-                if session.item_id < session.search.results_total_count:
+        elif global_state.session.screen_id == 'item_view':
+            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+                screen_change('welcome')
+            if global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+                screen_change('summary')
+            elif global_state.session.user_input.upper() == 'PT': # Previous Title
+                if global_state.session.item_id > 1:
+                    global_state.session.item_id -= 1
+                    global_state.session.item = list(session.search.results.values())[global_state.session.item_id - 1]
+                    screen_change('item_view')
+            elif global_state.session.user_input.upper() == 'NT': # Next Title
+                if global_state.session.item_id < global_state.session.search.results_total_count:
                     session.item_id += 1
-                    session.item = list(session.search.results.values())[session.item_id - 1]
-                    screen_change(screen_win, 'item_view')
+                    session.item = list(global_state.session.search.results.values())[global_state.session.item_id - 1]
+                    screen_change('item_view')
         else:
             break
 
@@ -330,6 +326,6 @@ def main(stdscr):
 if __name__ == "__main__":
     try:
         wrapper(main)
-        print('got: "' + session.user_input +'"')
+        print('got: "' + global_state.session.user_input +'"')
     except KeyboardInterrupt:
         print('bye!')
