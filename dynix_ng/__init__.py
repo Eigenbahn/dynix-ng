@@ -120,6 +120,27 @@ SCREEN_PROMPT_COUNTER = "Type additional word(s) :"
 
 SCREEN_PROMPT_ITEM = "Press <Return> to see next screen :"
 
+SCREEN_PROMPTS = {
+    'welcome': SCREEN_PROMPT_WELCOME,
+    'title_search_alpha': SCREEN_PROMPT_SEARCH_TITLE,
+    'title_search_keyword': SCREEN_PROMPT_SEARCH_TITLE,
+    'search_counter': SCREEN_PROMPT_COUNTER,
+    'summary': SCREEN_PROMPT_COUNTER,
+    'item_view': SCREEN_PROMPT_ITEM,
+}
+
+def get_input_length(screen_id):
+    if screen_id == 'welcome':
+        return 2
+    elif screen_id in SEARCH_SCREENS:
+        return 20
+    elif global_state.session.screen_id == 'search_counter':
+        return 15
+    elif global_state.session.screen_id == 'summary':
+        return 2
+    elif global_state.session.screen_id == 'item_view':
+        return 2
+    return 0
 
 # DISPLAY_MODEM_HEADER = True
 DISPLAY_MODEM_HEADER = False
@@ -133,6 +154,9 @@ static_screens = {}
 recall_query = []
 
 results = None
+
+# backends
+db = CalibreDb()
 
 
 
@@ -154,24 +178,32 @@ def screen_change(new_screen_id):
     global SEARCH_SCREENS
     global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
 
+    session = global_state.session
+
     global_state.screen_win.clear()
 
     if not global_state.session.screen_id in static_screens.keys():
         del global_state.session.screen # free memory
 
-    global_state.session.screen_id = new_screen_id
+    session.screen_id = new_screen_id
+    input_prompt = global_state.screen_prompt_list[session.screen_id]
+    input_y = len(input_prompt) + 2 + 1
+    input_len = get_input_length(new_screen_id)
+    global_state.inputwin = curses.newwin(1, input_len + 1, curses.LINES - 2, input_y)
 
     if global_state.session.screen_id in static_screens.keys():
         global_state.session.screen = static_screens[global_state.session.screen_id]
     # elif session.screen_id == 'title_search_keyword':
-    elif global_state.session.screen_id in SEARCH_SCREENS:
-        global_state.session.screen = SearchScreen(global_state.session.screen_id, SCREENS[global_state.session.screen_id], SCREEN_PROMPT_SEARCH_TITLE, 20)
-    elif global_state.session.screen_id == 'search_counter':
-        global_state.session.screen = CounterScreen(global_state.session.screen_id, "", SCREEN_PROMPT_COUNTER, 15)
-    elif global_state.session.screen_id == 'summary':
-        global_state.session.screen = SummaryScreen(global_state.session.screen_id, "", SCREEN_PROMPT_COUNTER, 2)
-    elif global_state.session.screen_id == 'item_view':
-        global_state.session.screen = ItemScreen(global_state.session.screen_id, "", SCREEN_PROMPT_ITEM, 2)
+    elif session.screen_id == 'welcome':
+        session.screen = WelcomeScreen()
+    elif session.screen_id in SEARCH_SCREENS:
+        session.screen = SearchScreen()
+    elif session.screen_id == 'search_counter':
+        session.screen = CounterScreen()
+    elif session.screen_id == 'summary':
+        session.screen = SummaryScreen()
+    elif session.screen_id == 'item_view':
+        session.screen = ItemScreen()
     else:
         # TODO: throw exception
         pass
@@ -196,6 +228,66 @@ def search_screen_to_backend_fields (backend, screen_id):
         return ['book_id']
 
 
+def handle_user_input():
+    global db
+    session = global_state.session
+
+    if session.screen_id == 'welcome':
+        if session.user_input in list(SCREENS.keys()):
+            screen_change(session.user_input)
+    elif session.screen_id == 'search_counter':
+        if session.user_input.upper() == 'D': # Show all results
+            screen_change('summary')
+            # elif session.screen_id == 'title_search_keyword':
+    elif session.screen_id in SEARCH_SCREENS:
+        if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+            screen_change('welcome')
+        elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+            screen_change('welcome')
+        else:
+            user_query = session.user_input
+         # search_fields = search_screen_to_backend_fields('calibre', session.screen_id)
+            # if not search_fields:
+            #     break
+         # session.search = DynixSearch(user_query, db, search_fields)
+            session.search = DynixSearch(user_query, db, ['title'])
+         # NB: systematic transition to search counter screen before search summary to mimick original behaviour
+            screen_change('search_counter')
+            if session.search.results_total_count <= 30:
+                time.sleep(0.1)
+                screen_change('summary')
+    elif session.screen_id == 'summary':
+        if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+            screen_change('welcome')
+        elif session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+            if session.search.results_total_count > 30:
+                screen_change('search_counter')
+            else:
+                screen_change('title_search_keyword')
+        elif session.user_input.isdigit():
+            session.item_id = int(session.user_input)
+            session.item = list(session.search.results.values())[session.item_id - 1]
+            screen_change('item_view')
+    elif session.screen_id == 'item_view':
+        if session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
+            screen_change('welcome')
+        if session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
+            screen_change('summary')
+        elif session.user_input.upper() == 'PT': # Previous Title
+            if session.item_id > 1:
+                session.item_id -= 1
+                session.item = list(session.search.results.values())[session.item_id - 1]
+                screen_change('item_view')
+        elif session.user_input.upper() == 'NT': # Next Title
+            if session.item_id < session.search.results_total_count:
+                session.item_id += 1
+                session.item = list(session.search.results.values())[session.item_id - 1]
+                screen_change('item_view')
+    else:
+        return "exit"
+
+
+
 
 ## SCRIPT
 
@@ -206,12 +298,6 @@ def main(stdscr):
 
     global SCREENS
     global SEARCH_SCREENS
-
-    # PROMPTS
-    global SCREEN_PROMPT_WELCOME, SCREEN_PROMPT_SEARCH_TITLE, SCREEN_PROMPT_COUNTER, SCREEN_PROMPT_ITEM
-
-    # backends
-    db = CalibreDb()
 
     win_list = []
 
@@ -232,12 +318,18 @@ def main(stdscr):
     global_state.screen_win = curses.newwin(curses.LINES - y, curses.COLS, y, 0)
 
     global_state.session = DynixSession()
-    screen_welcome = WelcomeScreen(global_state.session.screen_id, SCREENS[global_state.session.screen_id], SCREEN_PROMPT_WELCOME, 2, WELCOME_MESSAGE, SCREENS)
-    static_screens[global_state.session.screen_id] = screen_welcome
-    global_state.session.screen = screen_welcome
+    global_state.screen_list = SCREENS
+    global_state.welcome_message = WELCOME_MESSAGE
+    global_state.screen_prompt_list = SCREEN_PROMPTS
+
+    screen_change('welcome')
+    # screen_welcome = WelcomeScreen(global_state.session.screen_id)
+    # static_screens[global_state.session.screen_id] = screen_welcome
+    # global_state.session.screen = screen_welcome
 
 
-    while True:
+    running = True
+    while running:
 
         stdscr.clear()
 
@@ -260,65 +352,9 @@ def main(stdscr):
         # NB: curses box has a tendency to add a trailing space when pressing <Return>
         global_state.session.user_input = user_input.strip()
 
-        if global_state.session.screen_id == 'welcome':
-            if global_state.session.user_input in list(SCREENS.keys()):
-                screen_change(global_state.session.user_input)
-        elif global_state.session.screen_id == 'search_counter':
-            if global_state.session.user_input.upper() == 'D': # Show all results
-                screen_change('summary')
-        # elif session.screen_id == 'title_search_keyword':
-        elif global_state.session.screen_id in SEARCH_SCREENS:
-            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change('welcome')
-            elif global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                screen_change('welcome')
-            else:
-                user_query = user_input
-
-                # search_fields = search_screen_to_backend_fields('calibre', session.screen_id)
-                # if not search_fields:
-                #     break
-
-                # session.search = DynixSearch(user_query, db, search_fields)
-                global_state.session.search = DynixSearch(user_query, db, ['title'])
-
-                # NB: systematic transition to search counter screen before search summary to mimick original behaviour
-                screen_change('search_counter')
-                if global_state.session.search.results_total_count <= 30:
-                    time.sleep(0.1)
-                    screen_change('summary')
-
-        elif global_state.session.screen_id == 'summary':
-            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change('welcome')
-            elif global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                if global_state.session.search.results_total_count > 30:
-                    screen_change('search_counter')
-                else:
-                    screen_change('title_search_keyword')
-            elif global_state.session.user_input.isdigit():
-                global_state.session.item_id = int(user_input)
-                global_state.session.item = list(global_state.session.search.results.values())[global_state.session.item_id - 1]
-                screen_change('item_view')
-
-        elif global_state.session.screen_id == 'item_view':
-            if global_state.session.user_input.upper() in ['SO', 'Q']: # Start Over / Quit current search
-                screen_change('welcome')
-            if global_state.session.user_input.upper() in ['P', 'B']: # Previous page / Back to previous search level
-                screen_change('summary')
-            elif global_state.session.user_input.upper() == 'PT': # Previous Title
-                if global_state.session.item_id > 1:
-                    global_state.session.item_id -= 1
-                    global_state.session.item = list(session.search.results.values())[global_state.session.item_id - 1]
-                    screen_change('item_view')
-            elif global_state.session.user_input.upper() == 'NT': # Next Title
-                if global_state.session.item_id < global_state.session.search.results_total_count:
-                    session.item_id += 1
-                    session.item = list(global_state.session.search.results.values())[global_state.session.item_id - 1]
-                    screen_change('item_view')
-        else:
-            break
-
+        next_action = handle_user_input()
+        if next_action == "exit":
+            running = False
 
 
 ## START

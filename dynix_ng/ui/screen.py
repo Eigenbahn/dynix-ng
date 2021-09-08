@@ -17,13 +17,8 @@ import dynix_ng.state.memory as global_state
 
 class DynixScreen(ABC):
 
-    def __init__(self, screen_id, desc, input_prompt, input_len):
-        self.screen_id = screen_id
-        self.desc = desc
-
-        self.input_prompt = input_prompt
-        input_y = len(self.input_prompt) + 2 + 1
-        self.inputwin = curses.newwin(1, input_len + 1, curses.LINES - 2, input_y)
+    def __init__(self):
+        pass
 
     def draw(self):
         pass
@@ -33,7 +28,7 @@ class DynixScreen(ABC):
 
     def refresh(self):
         global_state.screen_win.refresh()
-        self.inputwin.refresh()
+        global_state.inputwin.refresh()
 
     def handle_user_input(self, user_input, SCREENS):
         pass
@@ -44,26 +39,22 @@ class DynixScreen(ABC):
 
 class WelcomeScreen(DynixScreen):
 
-    def __init__(self, screen_id, desc, input_prompt, input_len,
-                 welcome_message, screens):
-        self.screens = screens
-        self.welcome_message = welcome_message
-        super().__init__(screen_id, desc, input_prompt, input_len)
-
     def draw(self):
         (lines, cols) = global_state.screen_win.getmaxyx()
+        session = global_state.session
+        input_prompt = global_state.screen_prompt_list[session.screen_id]
 
         y = 2
 
         # welcome banner
-        for message in self.welcome_message:
+        for message in global_state.welcome_message:
             addstr_x_centered(global_state.screen_win, y, message)
         y += 1
 
         # menu
         i = 1
         menu_start_y = y
-        menu_desc_list = list(self.screens.values())[1:]
+        menu_desc_list = list(global_state.screen_list.values())[1:]
         is_dual_pane = len(menu_desc_list) > lines - menu_start_y - 3
         # is_dual_pane = True
         dual_pane_nb_elems = 9
@@ -87,7 +78,7 @@ class WelcomeScreen(DynixScreen):
                 y = menu_start_y
 
         # input
-        prompt_text = " " + self.input_prompt +  " "
+        prompt_text = " " + input_prompt +  " "
         # prompt_text = " Enter your selection (1-" + str(len(menu_desc_list)) + ") and press <Return> : "
         global_state.screen_win.addstr(lines - 2, 1, prompt_text, curses.A_STANDOUT)
 
@@ -96,11 +87,11 @@ class WelcomeScreen(DynixScreen):
 
 
     def get_input(self):
-        box = CustomTextbox(self.inputwin)
+        box = CustomTextbox(global_state.inputwin)
         user_input = box.edit() # NB: breaks after `HALF_DELAY`
         if user_input != curses.ERR:
             try:
-                    return list(self.screens.keys())[int(user_input)]
+                    return list(global_state.screen_list.keys())[int(user_input)]
             except:
                 return user_input
         return curses.ERR
@@ -118,10 +109,13 @@ class SearchScreen(DynixScreen):
 
     def draw(self):
         (lines, cols) = global_state.screen_win.getmaxyx()
+        session = global_state.session
+        desc = global_state.screen_list[session.screen_id]
+        input_prompt = global_state.screen_prompt_list[session.screen_id]
 
         y = 1
 
-        addstr_x_centered(global_state.screen_win, y, self.desc)
+        addstr_x_centered(global_state.screen_win, y, desc)
         y += 1
 
         y += 4
@@ -134,14 +128,14 @@ class SearchScreen(DynixScreen):
             global_state.screen_win.addstr(y, 15, example)
             y += 2
         # input
-        prompt_text = " " + self.input_prompt +  " "
+        prompt_text = " " + input_prompt +  " "
         global_state.screen_win.addstr(lines - 2, 1, prompt_text, curses.A_STANDOUT)
         # shortcuts
         global_state.screen_win.addstr(lines - 1, 0, "Commands: SO=Start Over, ?=Help")
 
 
     def get_input(self):
-        box = CustomTextbox(self.inputwin)
+        box = CustomTextbox(global_state.inputwin)
         user_input = box.edit() # NB: breaks after `HALF_DELAY`
 
         if user_input != curses.ERR:
@@ -161,29 +155,31 @@ class SearchScreen(DynixScreen):
 # SEARCH RESULT COUNTER SCREEN
 
 class CounterScreen(DynixScreen):
-    def __init__(self, screen_id, desc, input_prompt, input_len):
+    def __init__(self):
+        session = global_state.session
+        session.search_stage = 'count'
+        session.search.query_count_incremental()
 
-        global_state.session.search_stage = 'count'
-        global_state.session.search.query_count_incremental()
-
-        super().__init__(screen_id, desc, input_prompt, input_len)
+        super().__init__()
 
 
     def draw(self):
         (lines, cols) = global_state.screen_win.getmaxyx()
+        session = global_state.session
+        input_prompt = global_state.screen_prompt_list[session.screen_id]
 
         nb_total = str(global_state.session.search.results_total_count)
 
         y = 1
 
-        global_state.screen_win.addstr(y, 5, " ".join(global_state.session.search.recall_query))
+        global_state.screen_win.addstr(y, 5, " ".join(session.search.recall_query))
         global_state.screen_win.addstr(y, 5 + 20 + 2, "Total=" + nb_total)
         y += 1
 
         global_state.screen_win.addstr(y, 4, "Searching...                Running Total")
         y += 2
 
-        for term, count in global_state.session.search.results_incremental_counts.items():
+        for term, count in session.search.results_incremental_counts.items():
             global_state.screen_win.addstr(y, 4, term)
             global_state.screen_win.addstr(y, 25, str(count))
             y += 1
@@ -194,14 +190,14 @@ class CounterScreen(DynixScreen):
         global_state.screen_win.addstr(lines - 4, 4, "Or, press 'D' and <Return> to see all " + nb_total + " titles.")
 
         # input
-        prompt_text = " " + self.input_prompt +  " "
+        prompt_text = " " + input_prompt +  " "
         global_state.screen_win.addstr(lines - 2, 1, prompt_text, curses.A_STANDOUT)
         # shortcuts
         global_state.screen_win.addstr(lines - 1, 0, "Commands: SO=Start Over, B=Back, D=Display, ?=Help")
 
 
     def get_input(self):
-        box = CustomTextbox(self.inputwin)
+        box = CustomTextbox(global_state.inputwin)
         user_input = box.edit() # NB: breaks after `HALF_DELAY`
 
         if user_input != curses.ERR:
@@ -222,20 +218,21 @@ class CounterScreen(DynixScreen):
 
 class SummaryScreen(DynixScreen):
 
-    def __init__(self, screen_id, desc, input_prompt, input_len):
+    def __init__(self):
+        session = global_state.session
+        session.search_stage = 'summary'
+        session.search.query()
 
-        global_state.session.search_stage = 'summary'
-        global_state.session.search.query()
-
-        super().__init__(screen_id, desc, input_prompt, input_len)
+        super().__init__()
 
     def draw(self):
         (lines, cols) = global_state.screen_win.getmaxyx()
+        session = global_state.session
 
         y = 1
 
         # query
-        global_state.screen_win.addstr(y, 4, "Your search:  " + ' '.join(global_state.session.search.recall_query))
+        global_state.screen_win.addstr(y, 4, "Your search:  " + ' '.join(session.search.recall_query))
         y += 1
 
         # table header
@@ -246,7 +243,7 @@ class SummaryScreen(DynixScreen):
 
         # results table
         i = 1
-        for item_id, item in global_state.session.search.results.items():
+        for item_id, item in session.search.results.items():
             author_summary = ' - '.join(item['authors_sorted'])
             pub_date = item['pub_date'][:10]
             if pub_date == '0101-01-01':
@@ -263,14 +260,14 @@ class SummaryScreen(DynixScreen):
 
         # paging
         # TODO: right-align
-        global_state.screen_win.addstr(lines - 3, 0, "---" + str(global_state.session.search.results_total_count) + " titles, End of List" + "---")
+        global_state.screen_win.addstr(lines - 3, 0, "---" + str(session.search.results_total_count) + " titles, End of List" + "---")
 
         # shortcuts
         global_state.screen_win.addstr(lines - 1, 0, "Commands: SO=Start Over, B=Back, D=Display, ?=Help")
 
 
     def get_input(self):
-        box = CustomTextbox(self.inputwin)
+        box = CustomTextbox(global_state.inputwin)
         user_input = box.edit() # NB: breaks after `HALF_DELAY`
 
         if user_input != curses.ERR:
@@ -283,12 +280,14 @@ class SummaryScreen(DynixScreen):
 
 class ItemScreen(DynixScreen):
 
-    def __init__(self, screen_id, desc, input_prompt, input_len):
-        global_state.session.search_stage = 'item'
-        super().__init__(screen_id, desc, input_prompt, input_len)
+    def __init__(self):
+        session = global_state.session
+        session.search_stage = 'item'
+        super().__init__()
 
     def draw(self):
         (lines, cols) = global_state.screen_win.getmaxyx()
+        session = global_state.session
 
         y = 1
 
@@ -296,29 +295,29 @@ class ItemScreen(DynixScreen):
 
         # query
         addstr_rigth_x(global_state.screen_win, y, 16, "Call Number:  ")
-        global_state.screen_win.addstr(y, props_x, str(global_state.session.item['book_id']))
+        global_state.screen_win.addstr(y, props_x, str(session.item['book_id']))
         y += 2
 
         addstr_rigth_x(global_state.screen_win, y, 16, "AUTHOR:")
 
-        for i, a in enumerate(global_state.session.item['authors_sorted'], start=1):
+        for i, a in enumerate(session.item['authors_sorted'], start=1):
             global_state.screen_win.addstr(y, props_x, str(i) + ") " + a)
             y += 1
         y += 1
 
         addstr_rigth_x(global_state.screen_win, y, 16, "TITLE:")
         # TODO: word wrap
-        global_state.screen_win.addstr(y, props_x, global_state.session.item['sorted_name'])
+        global_state.screen_win.addstr(y, props_x, session.item['sorted_name'])
         y += 2
 
         # addstr_rigth_x(global_state.screen_win, y, 16, "PUBLISHER:")
         addstr_rigth_x(global_state.screen_win, y, 16, "IMPRINT:")
-        global_state.screen_win.addstr(y, props_x, ' - '.join(global_state.session.item['publishers']))
+        global_state.screen_win.addstr(y, props_x, ' - '.join(session.item['publishers']))
         y += 2
 
         # addstr_rigth_x(global_state.screen_win, y, 16, "TAGS:")
         addstr_rigth_x(global_state.screen_win, y, 16, "SUBJECTS:")
-        for i, t in enumerate(global_state.session.item['tags'], start=1):
+        for i, t in enumerate(session.item['tags'], start=1):
             global_state.screen_win.addstr(y, props_x, str(i) + ") " + t)
             y += 1
         y += 1
@@ -329,7 +328,7 @@ class ItemScreen(DynixScreen):
 
 
     def get_input(self):
-        box = CustomTextbox(self.inputwin)
+        box = CustomTextbox(global_state.inputwin)
         user_input = box.edit() # NB: breaks after `HALF_DELAY`
 
         if user_input != curses.ERR:
