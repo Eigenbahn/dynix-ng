@@ -36,6 +36,10 @@ Integration w/ archive.org, worldcat.org, proper [OPAC](https://en.wikipedia.org
 We expected to also integrate w/ [goodreads.com](https://www.goodreads.com/) but sadly they are starting to [close their public API](https://joealcorn.co.uk/blog/2020/goodreads-retiring-API).
 
 
+## Integrations
+
+https://blog.archive.org/developers/
+
 ## Author
 
 Jordan Besly [@p3r7](https://github.com/p3r7) ([blog](https://www.eigenbahn.com/)).

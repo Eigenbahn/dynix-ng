@@ -4,3 +4,5 @@ dependencies:
 - pip
 - ncurses
 - sqlite
+- requests=2.*
+- chardet

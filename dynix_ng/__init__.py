@@ -24,6 +24,7 @@ from dynix_ng.utils.curses.textpad import CustomTextbox
 from dynix_ng.utils.curses.print import addstr_x_centered
 
 from dynix_ng.library.backend.calibre import CalibreDb
+from dynix_ng.library.backend.archive import ArchiveOrgApi
 
 import dynix_ng.utils.query.recall as recall
 
@@ -91,19 +92,26 @@ SCREENS = {
     'bib_search': 'Dynix BIB No. Search',
     'class_search_authority': 'CLASS Authority Search',
     'pub_search_alpha': 'PUBLISHER Alphabetical Search',
-    'polytek_db': 'Polytechnic Resources Database',
+    # 'polytek_db': 'Polytechnic Resources Database',
+    'title_search_archive.org': 'TITLE Archive.Org search',
 
     'quit': 'Quit searching',
 }
 
-SEARCH_SCREENS = ['author_search_alpha',
-                  'pub_search_alpha',
-                  'title_search_alpha', 'title_search_keyword',
-                  'subject_search',
-                  'word_search_general',
-                  'series_search_keyword', 'series_search_authority'
-                  'universal_id_search',
-                  'bib_search']
+SEARCH_SCREENS = [
+    # Calibre
+    'author_search_alpha',
+    'pub_search_alpha',
+    'title_search_alpha', 'title_search_keyword',
+    'subject_search',
+    'word_search_general',
+    'series_search_keyword', 'series_search_authority'
+    'universal_id_search',
+    'bib_search',
+
+    # Archive.Org
+    'title_search_archive.org',
+]
 
 
 WELCOME_MESSAGE = ["Welcome to the Online Public Access Catalog!",
@@ -124,6 +132,7 @@ SCREEN_PROMPTS = {
     'welcome': SCREEN_PROMPT_WELCOME,
     'title_search_alpha': SCREEN_PROMPT_SEARCH_TITLE,
     'title_search_keyword': SCREEN_PROMPT_SEARCH_TITLE,
+    'title_search_archive.org': SCREEN_PROMPT_SEARCH_TITLE,
     'search_counter': SCREEN_PROMPT_COUNTER,
     'summary': SCREEN_PROMPT_COUNTER,
     'item_view': SCREEN_PROMPT_ITEM,
@@ -156,7 +165,8 @@ recall_query = []
 results = None
 
 # backends
-db = CalibreDb()
+calibreBackend = CalibreDb()
+archiveOrgBackend = ArchiveOrgApi()
 
 
 
@@ -165,7 +175,7 @@ db = CalibreDb()
 # db = CalibreDb()
 # recall_query = recall.user_query_to_recall("stat?")
 # where = recall.recall_to_sql(['title'], recall_query, 'sqlite3')
-# res = db.book_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
+# res = db.item_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
 # pprint(res)
 # exit()
 
@@ -209,27 +219,69 @@ def screen_change(new_screen_id):
         pass
 
 
+def search_screen_to_search_type (screen_id):
+    if screen_id == 'author_search_alpha':
+        return 'author'
+    elif screen_id == 'pub_search_alpha':
+        return 'publisher'
+    elif screen_id in ['title_search_alpha', 'title_search_keyword',
+                       'title_search_archive.org']:
+        return 'title'
+    elif screen_id == 'subject_search':
+        return 'subject'
+    elif screen_id == 'word_search_general':
+        return 'word'
+    elif screen_id in ['series_search_keyword', 'series_search_authority']:
+        return 'series'
+    elif screen_id == 'universal_id_search':
+        return 'universal_id'
+    elif screen_id == 'bib_search':
+        return 'bib'
+
+def search_screen_to_backend (screen_id):
+    global calibreBackend
+    if screen_id == 'author_search_alpha':
+        return calibreBackend
+    elif screen_id == 'pub_search_alpha':
+        return calibreBackend
+    elif screen_id in ['title_search_alpha', 'title_search_keyword']:
+        return calibreBackend
+    elif screen_id == 'subject_search':
+        return calibreBackend
+    elif screen_id == 'word_search_general':
+        return calibreBackend
+    elif screen_id in ['series_search_keyword', 'series_search_authority']:
+        return calibreBackend
+    elif screen_id == 'universal_id_search':
+        return calibreBackend
+    elif screen_id == 'bib_search':
+        return calibreBackend
+    elif screen_id == 'title_search_archive.org':
+        return archiveOrgBackend
+
+
+## NB: deprecated
 def search_screen_to_backend_fields (backend, screen_id):
     if screen_id == 'author_search_alpha':
         return ['author']
     elif screen_id == 'pub_search_alpha':
         return ['publisher']
-    elif screen_id in ['title_search_alpha', 'title_search_keyword']:
+    elif screen_id in ['title_search_alpha', 'title_search_keyword',
+                       'title_search_archive.org']:
         return ['title']
     elif screen_id == 'subject_search':
         return ['tag']
     elif screen_id == 'word_search_general':
-        return ['author', 'publisher', 'title', 'tag', 'series']
+        return ['author', 'publisher', 'title', 'subject', 'series']
     elif screen_id in ['series_search_keyword', 'series_search_authority']:
         return ['series']
     elif screen_id == 'universal_id_search':
         return ['ISBN', 'LCCN']
     elif screen_id == 'bib_search':
-        return ['book_id']
+        return ['item_id']
 
 
 def handle_user_input():
-    global db
     session = global_state.session
 
     if session.screen_id == 'welcome':
@@ -246,12 +298,10 @@ def handle_user_input():
             screen_change('welcome')
         else:
             user_query = session.user_input
-         # search_fields = search_screen_to_backend_fields('calibre', session.screen_id)
-            # if not search_fields:
-            #     break
-         # session.search = DynixSearch(user_query, db, search_fields)
-            session.search = DynixSearch(user_query, db, ['title'])
-         # NB: systematic transition to search counter screen before search summary to mimick original behaviour
+            search_type = search_screen_to_search_type(session.screen_id)
+            backend = search_screen_to_backend(session.screen_id)
+            session.search = DynixSearch(user_query, backend, search_type)
+            # NB: systematic transition to search counter screen before search summary to mimick original behaviour
             screen_change('search_counter')
             if session.search.results_total_count <= 30:
                 time.sleep(0.1)

@@ -7,8 +7,8 @@ import sqlite3
 
 from pprint import pprint
 
-
-# UTILS
+## ------------------------------------------------------------------------
+## UTILS
 
 
 def sqlite3_rx(expr, item):
@@ -17,10 +17,21 @@ def sqlite3_rx(expr, item):
 def dict_from_sqlite3_row(row):
     return dict(zip(row.keys(), row))
 
-
-# MAIN CLASS
+
+## ------------------------------------------------------------------------
+## MAIN CLASS
 
 class CalibreDb():
+
+    # -------------------
+    # CONSTS
+
+    BACKEND_TYPE = 'sql'
+    BACKEND_DIALECT = 'sqlite3'
+
+
+    # -------------------
+    # LIFECYCLE
 
     def __init__(self, db_path='~/Calibre Library/metadata.db'):
         self.db_path = expanduser(db_path)
@@ -45,9 +56,47 @@ class CalibreDb():
 
 
     # -------------------
+    # FIELDS
+
+    FIELD_CONVERTION = {
+        'author': 'author',
+        'publisher': 'publisher',
+
+        'title': 'title',
+        'subject': 'tag',
+        'series': 'series',
+
+        'ISBN': 'ISBN',
+        'LCCN': 'LCCN',
+
+        'item_id': 'book_id',
+    }
+
+    def corresponding_field(self, std_field):
+        if std_field in self.FIELD_CONVERTION:
+            return self.FIELD_CONVERTION[std_field]
+
+    SEARCH_TYPE_FIELDS = {
+        'author': ['author'],
+        'publisher': ['publisher'],
+        'title': ['title'],
+        'subject': ['tag'],
+        'word': ['author', 'publisher', 'title', 'tag', 'series'],
+        'series': ['series'],
+        'universal_id': ['ISBN', 'LCCN'],
+        'item': ['book_id'],
+        'bib': ['book_id'],
+    }
+
+    def search_type_corresponding_fields(self, search_type):
+        if search_type in self.SEARCH_TYPE_FIELDS:
+            return self.SEARCH_TYPE_FIELDS[search_type]
+
+
+    # -------------------
     # ITEMS
 
-    def book_list(self, fetch_mode='iter', fetch_format='v', where="",
+    def item_list(self, fetch_mode='iter', fetch_format='v', where="",
                   detailed=False):
 
         order_by = 'b.sort ASC'
@@ -59,7 +108,7 @@ class CalibreDb():
             order_by = ''
         else:
             cols = '''
-            b.id AS book_id,
+            b.id AS item_id,
             b.title AS name,
             b.sort AS sorted_name,
             b.pubdate AS pub_date,
@@ -75,7 +124,7 @@ class CalibreDb():
                 p.name as publisher,
                 s.name as series,
                 s.sort as series_sorted,
-                t.name as tag
+                t.name as subject
                 '''
 
         where_list = []
@@ -111,11 +160,13 @@ class CalibreDb():
 
         raw_res = self.__fetch(q, fetch_mode, fetch_format)
 
+
         if detailed:
-            joins = ('author', 'publisher', 'series', 'tag')
+            joins = ('author', 'publisher', 'series', 'subject')
+            field_2_std = {v: k for k, v in self.FIELD_CONVERTION.items()}
             res = {}
             for b_a in raw_res:
-                b_id = b_a['book_id']
+                b_id = b_a['item_id']
 
                 cols_to_group = []
                 for j in joins:
@@ -139,8 +190,13 @@ class CalibreDb():
                     for k in cols_to_group:
                         if k.endswith('_sorted'):
                             k_new = k.replace('_sorted', 's_sorted')
+                            # BUG: this is a buggy attempt
+                            # std_k = field_2_std[k.replace('_sorted', '')]
+                            # k_new = std_k + 's_sorted'
                         else:
                             k_new = k + 's'
+                            # std_k = field_2_std[k]
+                            # k_new = std_k + 's'
                         res[b_id][k_new].add(b_a[k])
             return res
 
@@ -172,7 +228,7 @@ class CalibreDb():
     # -------------------
     # JOINS
 
-    def authors_for_book(self, book_id, fetch_mode='iter'):
-        q = 'SELECT book AS book_id, author AS author_id FROM books_authors_link;'
+    def authors_for_item(self, item_id, fetch_mode='iter'):
+        q = 'SELECT book AS item_id, author AS author_id FROM books_authors_link;'
         return self.__fetch(q, 'all')
         # return self.author_list(fetch_mode, [''])

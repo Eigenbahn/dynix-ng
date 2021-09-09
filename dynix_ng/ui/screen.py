@@ -229,6 +229,11 @@ class SummaryScreen(DynixScreen):
         (lines, cols) = global_state.screen_win.getmaxyx()
         session = global_state.session
 
+        pub_date_len = 10
+        pub_date_len_w_margin = 15
+        normal_margin = 2
+        name_l_margin= 6
+
         y = 1
 
         # query
@@ -238,25 +243,39 @@ class SummaryScreen(DynixScreen):
         # table header
         global_state.screen_win.addstr(y, 6, "AUTHOR")
         addstr_x_centered(global_state.screen_win, y, "TITLE")
-        global_state.screen_win.addstr(y, cols - 15, "DATE")
+        global_state.screen_win.addstr(y, cols - pub_date_len_w_margin, "DATE")
         y += 1
 
         # results table
         i = 1
         for item_id, item in session.search.results.items():
-            author_summary = ' - '.join(item['authors_sorted'])
-            pub_date = item['pub_date'][:10]
+            # author_summary = ' - '.join(item['authors_sorted'])
+            res_id_prefix = str(i) + ". "
+            author_summary = ' - '.join(item['authors'])
+            author_line = res_id_prefix + author_summary
+            if len(author_line) > (cols - pub_date_len_w_margin - (normal_margin * 2)):
+                author_line = author_line[:(cols - pub_date_len_w_margin - (normal_margin * 2) - 3)] + '...'
+
+            name_line = item['name']
+            if len(name_line) > (cols - name_l_margin - pub_date_len_w_margin - normal_margin):
+                name_line = name_line[:(cols - name_l_margin - pub_date_len_w_margin - normal_margin) - 3] + '...'
+
+            pub_date = item['pub_date'][:pub_date_len]
             if pub_date == '0101-01-01':
                 pub_date = '????'
             # TODO: word wrap
-            # title_n_ndate = item['sorted_name'] + ' ' + pub_date
-            global_state.screen_win.addstr(y, 2, str(i) + ". " + author_summary)
+            global_state.screen_win.addstr(y, normal_margin, author_line)
             y += 1
             # global_state.screen_win.addstr(y, 6, title_n_ndate)
-            global_state.screen_win.addstr(y, 6, item['sorted_name'])
-            global_state.screen_win.addstr(y, cols - 15, pub_date)
+            # global_state.screen_win.addstr(y, 6, item['sorted_name'])
+            global_state.screen_win.addstr(y, name_l_margin, name_line)
+            # global_state.screen_win.addstr(y, 6, item['sorted'])
+            global_state.screen_win.addstr(y, cols - pub_date_len_w_margin, pub_date) # TODO: fixme
             i += 1
             y += 1
+
+            if y == lines - 3:
+                break
 
         # paging
         # TODO: right-align
@@ -294,20 +313,22 @@ class ItemScreen(DynixScreen):
         props_x = 9 + 7 + 2
 
         # query
-        addstr_rigth_x(global_state.screen_win, y, 16, "Call Number:  ")
-        global_state.screen_win.addstr(y, props_x, str(session.item['book_id']))
+        addstr_rigth_x(global_state.screen_win, y, 16, "Call Number:")
+        global_state.screen_win.addstr(y, props_x, str(session.item['item_id']))
         y += 2
 
         addstr_rigth_x(global_state.screen_win, y, 16, "AUTHOR:")
 
-        for i, a in enumerate(session.item['authors_sorted'], start=1):
+        # for i, a in enumerate(session.item['authors_sorted'], start=1):
+        for i, a in enumerate(session.item['authors'], start=1):
             global_state.screen_win.addstr(y, props_x, str(i) + ") " + a)
             y += 1
         y += 1
 
         addstr_rigth_x(global_state.screen_win, y, 16, "TITLE:")
         # TODO: word wrap
-        global_state.screen_win.addstr(y, props_x, session.item['sorted_name'])
+        # global_state.screen_win.addstr(y, props_x, session.item['sorted_name'])
+        global_state.screen_win.addstr(y, props_x, session.item['name'])
         y += 2
 
         # addstr_rigth_x(global_state.screen_win, y, 16, "PUBLISHER:")
@@ -315,11 +336,12 @@ class ItemScreen(DynixScreen):
         global_state.screen_win.addstr(y, props_x, ' - '.join(session.item['publishers']))
         y += 2
 
-        # addstr_rigth_x(global_state.screen_win, y, 16, "TAGS:")
-        addstr_rigth_x(global_state.screen_win, y, 16, "SUBJECTS:")
-        for i, t in enumerate(session.item['tags'], start=1):
-            global_state.screen_win.addstr(y, props_x, str(i) + ") " + t)
-            y += 1
+        if session.item['subjects']:
+            # addstr_rigth_x(global_state.screen_win, y, 16, "TAGS:")
+            addstr_rigth_x(global_state.screen_win, y, 16, "SUBJECTS:")
+            for i, t in enumerate(session.item['subjects'], start=1):
+                global_state.screen_win.addstr(y, props_x, str(i) + ") " + t)
+                y += 1
         y += 1
 
 

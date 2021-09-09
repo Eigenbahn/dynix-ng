@@ -2,7 +2,7 @@
 
 
 
-# USER-INPUIT -> RECALL
+# USER-INPUT -> RECALL
 
 def user_query_to_recall(query):
 
@@ -15,6 +15,41 @@ def user_query_to_recall(query):
     query_terms = list(filter(None, query.split(' ')))
 
     return query_terms
+
+
+
+# RECALL -> DB DIALECT
+
+def recall_to_db_dialect(db, columns, query_terms):
+    if db.BACKEND_TYPE == 'sql':
+        return recall_to_sql(columns, query_terms, db.BACKEND_DIALECT)
+    elif db.BACKEND_TYPE == 'lucene':
+        return recall_to_lucene(columns, query_terms)
+
+
+
+# RECALL -> LUCENE
+
+def recall_to_lucene(columns, query_terms):
+    archive_term_list = []
+    for term in query_terms:
+        ends_with_s = term[-1] == "S"
+        ends_with_apostroph_s = term[-2:] in ("'S", "S'")
+        if term[-1] == '?':
+            term = term.replace('?', '*')
+        elif ends_with_s or ends_with_apostroph_s:
+            if ends_with_apostroph_s:
+                term = term[-2:]
+            else:
+                term = term[-1]
+        archive_term_list.append(term)
+    v_filter = '(' +  ' OR '.join(archive_term_list) + ')'
+
+    archive_query_filters = []
+    for column in columns:
+        archive_query_filters.append(column + ':' + v_filter)
+
+    return ' OR '.join(archive_query_filters)
 
 
 

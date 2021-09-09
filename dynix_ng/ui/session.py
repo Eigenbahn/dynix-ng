@@ -20,11 +20,12 @@ class DynixSession():
 
 
 class DynixSearch():
-    def __init__(self, user_query, backend, backend_fields):
+    def __init__(self, user_query, backend, search_type):
         self.user_query = user_query
         self.recall_query = recall.user_query_to_recall(self.user_query)
+        self.search_type = search_type
         self.backend = backend
-        self.backend_fields = backend_fields
+        self.backend_fields = backend.search_type_corresponding_fields(search_type)
 
         self.results_total_count = 0
         self.results_incremental_counts = {}
@@ -34,14 +35,13 @@ class DynixSearch():
         incremental_terms = []
         for term in self.recall_query:
             incremental_terms.append(term)
-            # TODO: move this outside to be generic
-            where = recall.recall_to_sql(self.backend_fields, incremental_terms, 'sqlite3')
-            count = self.backend.book_list(fetch_mode='first', fetch_format='count', where=where)
+            where = recall.recall_to_db_dialect(self.backend, self.backend_fields, incremental_terms)
+            count = self.backend.item_list(fetch_mode='first', fetch_format='count', where=where)
             self.results_incremental_counts[term] = count
 
         self.results_total_count = list(self.results_incremental_counts.values())[-1]
 
     def query(self):
         # TODO: move this outside to be generic
-        where = recall.recall_to_sql(self.backend_fields, self.recall_query, 'sqlite3')
-        self.results = self.backend.book_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
+        where = recall.recall_to_db_dialect(self.backend, self.backend_fields, self.recall_query)
+        self.results = self.backend.item_list(fetch_mode='all', fetch_format='k_v', where=where, detailed=True)
